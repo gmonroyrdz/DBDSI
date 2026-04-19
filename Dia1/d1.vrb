@@ -1,0 +1,19 @@
+\frametitle{Configuración inicial (vista previa)}
+\begin{enumerate}
+        \item \textbf{PostgreSQL + PostGIS} con Docker:
+        \begin{lstlisting}[basicstyle=\ttfamily\small]
+docker run --name postgis -e POSTGRES_PASSWORD=admin123 \
+           -p 5432:5432 -d postgis/postgis
+        \end{lstlisting}
+        \item \textbf{Proyecto Spring Boot} (Spring Initializr):
+        \begin{itemize}
+            \item Dependencias: Web, Data JPA, PostgreSQL Driver.
+        \end{itemize}
+        \item \textbf{Entidades JPA} mapeando las tablas (Vehículo, Ubicación, etc.).
+        \item \textbf{Configuración:} application.properties con URL, usuario, contraseña.
+        \item \textbf{Verificación:} Insertar datos de prueba y consultar con DBeaver.
+    \end{enumerate}
+    \begin{alertblock}{¡Atención!}
+        Para usar PostGIS desde JPA necesitamos agregar el dialecto espacial:
+        \texttt{hibernate.dialect=org.hibernate.spatial.dialect.postgis.PostgisDialect}
+    \end{alertblock}

@@ -1,0 +1,207 @@
+\documentclass[10pt, aspectratio=169]{beamer}
+\usetheme{Madrid}
+\usecolortheme{default}
+
+% Paquetes necesarios
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Configuración de listings para SQL y Java
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    breaklines=true,
+    showstringspaces=false
+}
+
+% Título y datos
+\title{Diseño de Base de Datos para un Sistema de Información: Proyecto FleetTrac}
+\subtitle{Día 1: Fundamentos, Modelado ER y Entorno Geoespacial}
+\author{Dr. Guillermo Monroy}
+\institute{UAMC}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\begin{frame}{Contenido del Día 1}
+    \tableofcontents
+\end{frame}
+
+\section{Introducción a los SIG y el proyecto FleetTrack}
+\begin{frame}{¿Qué es un Sistema de Información Geoespacial?}
+    \begin{itemize}
+        \item Combina datos geográficos (ubicaciones, rutas, áreas) con información alfanumérica.
+        \item Permite: visualizar en mapas, consultas espaciales (distancia, intersección), análisis de rutas.
+        \item \textbf{Ejemplos:} Waze, Google Maps, aplicaciones de logística, monitoreo de flotas.
+    \end{itemize}
+    \vspace{0.5cm}
+    \textbf{Nuestro proyecto: \textit{FleetTrack}}
+    \begin{itemize}
+        \item Sistema de monitoreo de vehículos y reporte colaborativo de incidentes.
+        \item Tecnologías: \textbf{PostgreSQL + PostGIS}, Spring Boot (Java), Leaflet.js.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Ciclo de vida de una base de datos}
+    \begin{enumerate}
+        \item \textbf{Requisitos:} ¿Qué necesita el sistema? (ej: guardar ubicaciones de vehículos, reportar incidentes, trazar rutas).
+        \item \textbf{Diseño conceptual:} Modelo Entidad-Relación (ER) – independiente del SGBD.
+        \item \textbf{Diseño lógico:} Traducción a tablas relacionales + normalización.
+        \item \textbf{Diseño físico:} Índices, particionamiento, tipos de datos específicos (ej: geometrías PostGIS).
+    \end{enumerate}
+    \begin{block}{Hoy nos enfocamos en el paso 2: \alert{Modelo ER}}
+        Identificamos entidades, atributos y relaciones para FleetTrack.
+    \end{block}
+\end{frame}
+
+\section{Modelo Entidad-Relación para FleetTrack}
+\begin{frame}{Entidades principales}
+    \begin{table}
+        \centering
+        \begin{tabular}{llp{5cm}}
+            \toprule
+            \textbf{Entidad} & \textbf{Atributos clave} & \textbf{Observación geoespacial} \\
+            \midrule
+            \texttt{Vehículo} & id, patente, modelo, año & No tiene geometría directa. \\
+            \texttt{Conductor} & id, nombre, licencia & -- \\
+            \texttt{Ubicación} & id, timestamp, \alert{coordenadas} & Punto geográfico (lat, lon). \\
+            \texttt{Incidente} & id, tipo, descripción, \alert{coordenadas}, estado & Punto. \\
+            \texttt{Ruta} & id, nombre, \alert{trayecto} & Línea (secuencia de puntos). \\
+            \bottomrule
+        \end{tabular}
+        \caption{Entidades con atributos relevantes}
+    \end{table}
+\end{frame}
+
+\begin{frame}{Relaciones y cardinalidades}
+    \begin{itemize}
+        \item \textbf{Conduce:} Conductor $\longrightarrow$ Vehículo (1:N).  
+              Un conductor puede manejar varios vehículos (histórico).
+        \item \textbf{Registra:} Vehículo $\longrightarrow$ Ubicación (1:N).  
+              Cada vehículo reporta muchas ubicaciones en el tiempo.
+        \item \textbf{Reporta:} Conductor $\longrightarrow$ Incidente (N:1).  
+              Un incidente puede ser reportado por un solo conductor (simplificado).
+        \item \textbf{Sigue:} Vehículo $\longrightarrow$ Ruta (N:N).  
+              Un vehículo puede recorrer varias rutas; una ruta es recorrida por muchos vehículos.
+    \end{itemize}
+    \begin{exampleblock}{Diagrama ER resumido}
+        \centering
+        \texttt{(Conductor) ---conduce--- (Vehículo) ---registra--- (Ubicación)} \\
+        \texttt{(Conductor) ---reporta--- (Incidente)} \\
+        \texttt{(Vehículo) ---sigue--- (Ruta)}
+    \end{exampleblock}
+\end{frame}
+
+\begin{frame}[fragile]{Atributos especiales: geometrías}
+    \begin{itemize}
+        \item En lugar de guardar \texttt{lat} y \texttt{lon} por separado, usamos un solo atributo de tipo \textbf{geometría}.
+        \item \textbf{PostGIS} (extensión de PostgreSQL) ofrece:
+            \begin{itemize}
+                \item \texttt{GEOMETRY(POINT, 4326)} – punto en coordenadas geográficas (lat/lon).
+                \item \texttt{GEOMETRY(LINESTRING, 4326)} – secuencia ordenada de puntos (ruta).
+                \item \texttt{GEOMETRY(POLYGON, 4326)} – áreas (ej: zona de restricción).
+            \end{itemize}
+        \item SRID 4326 = sistema de coordenadas WGS84 (GPS).
+    \end{itemize}
+    \vspace{0.3cm}
+
+    \textbf{Ejemplo de inserción:}
+
+    \begin{lstlisting}[language=SQL]
+INSERT INTO ubicacion (vehiculo_id, coordenadas, timestamp)
+VALUES (1, ST_SetSRID(ST_MakePoint(-58.3816, -34.6037), 4326), NOW());
+    \end{lstlisting}
+\end{frame}
+
+\section{Tipos de datos espaciales básicos}
+\begin{frame}{POINT, LINESTRING y POLYGON}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Punto}
+        \begin{itemize}
+            \item Una coordenada (X,Y).
+            \item Útil para: ubicaciones de vehículos, incidentes.
+        \end{itemize}
+        \textbf{Línea}
+        \begin{itemize}
+            \item Conjunto ordenado de puntos.
+            \item Útil para: rutas, trayectorias.
+        \end{itemize}
+        \column{0.5\textwidth}
+        \textbf{Polígono}
+        \begin{itemize}
+            \item Área cerrada (ej: zona de exclusión).
+            \item Opcional en nuestro proyecto.
+        \end{itemize}
+    \end{columns}
+    \vspace{0.5cm}
+    \begin{block}{Funciones espaciales útiles (veremos más adelante)}
+        \texttt{ST\_Distance}, \texttt{ST\_Within}, \texttt{ST\_Length}, \texttt{ST\_AsGeoJSON}
+    \end{block}
+\end{frame}
+
+\section{Preparación del entorno práctico}
+\begin{frame}[fragile]{Configuración inicial (vista previa)}
+    \begin{enumerate}
+        \item \textbf{PostgreSQL + PostGIS} con Docker:
+        \begin{lstlisting}[basicstyle=\ttfamily\small]
+docker run --name postgis -e POSTGRES_PASSWORD=admin123 \
+           -p 5432:5432 -d postgis/postgis
+        \end{lstlisting}
+        \item \textbf{Proyecto Spring Boot} (Spring Initializr):
+        \begin{itemize}
+            \item Dependencias: Web, Data JPA, PostgreSQL Driver.
+        \end{itemize}
+        \item \textbf{Entidades JPA} mapeando las tablas (Vehículo, Ubicación, etc.).
+        \item \textbf{Configuración:} application.properties con URL, usuario, contraseña.
+        \item \textbf{Verificación:} Insertar datos de prueba y consultar con DBeaver.
+    \end{enumerate}
+    \begin{alertblock}{¡Atención!}
+        Para usar PostGIS desde JPA necesitamos agregar el dialecto espacial:
+        \texttt{hibernate.dialect=org.hibernate.spatial.dialect.postgis.PostgisDialect}
+    \end{alertblock}
+\end{frame}
+
+\section{Resumen y tareas}
+\begin{frame}{Resumen del día}
+    \begin{itemize}
+        \item Entendimos qué es un SIG y cómo se aplica a logística.
+        \item Aprendimos el ciclo de vida de una BD y nos centramos en el modelo ER.
+        \item Identificamos las entidades, relaciones y atributos de \textit{FleetTrack}.
+        \item Introdujimos tipos de datos espaciales (Point, LineString) y la extensión PostGIS.
+        \item Configuramos el entorno base (Docker + Spring Boot).
+    \end{itemize}
+    \vspace{0.5cm}
+    \textbf{Tarea para casa:}
+    \begin{enumerate}
+        \item Completar el diagrama ER incluyendo todos los atributos (ej: \texttt{incidente.tipo} podría ser ENUM).
+        \item Asegurarse de que el contenedor PostgreSQL+PostGIS funciona correctamente.
+        \item Opcional: crear las entidades JPA básicas (Vehículo y Conductor).
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Referencias y recursos}
+    \begin{itemize}
+        \item Documentación PostGIS: \url{https://postgis.net/documentation/}
+        \item Spring Data JPA: \url{https://spring.io/projects/spring-data-jpa}
+        \item Hibernate Spatial: \url{https://hibernate.org/orm/spatial/}
+        \item Leaflet.js: \url{https://leafletjs.com/}
+    \end{itemize}
+    \vspace{1cm}
+    \centering
+    \textbf{¡Manos a la obra!}
+\end{frame}
+
+\end{document}
